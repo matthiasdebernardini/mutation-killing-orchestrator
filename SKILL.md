@@ -32,7 +32,7 @@ owns the triage → fix → verify loop. Both can be installed side by side.
 |---|---|---|
 | 0 — Bootstrap & scope | Orchestrator (session Opus) | Confirm scope (`--package`/`--file`/`--in-diff <diff-file>`); gitignore `mutants.out/`; `cargo nextest run -p <crate>` baseline (HALT if red); assert cargo-mutants uses nextest (`--test-tool nextest`); detect codegraph + jq. Dispatch capability (`Task` + `model:` override) is an **asserted precondition** — not probed. |
 | 1 — RUN | Deterministic shell | Inline cargo-mutants command (§6), background, judge from the **summary line** (never `\| tail`). 0 missed → report success, done. Failure flood → one flaky-vs-jobs re-run, then HALT. |
-| 2 — TRIAGE | **1× Task, `model: opus`**, effort=high (xhigh if raw `MissedMutant` count > 100) | Run `scripts/select-findings.sh` first (deterministic grouping + op-class + noise pre-tag), then dispatch ONE opus agent that **consumes** that grouped JSON (no re-jq), scores, selects up to top-3, and writes `findings.json`. Prompt: `references/ORCHESTRATION.md`. |
+| 2 — TRIAGE | **1× Task, best frontier judge** (`model: fable` if available, else `model: opus`), effort=high (xhigh if raw `MissedMutant` count > 100) | Run `scripts/select-findings.sh` first (deterministic grouping + op-class + noise pre-tag), then dispatch ONE judge agent that **consumes** that grouped JSON (no re-jq), scores, selects up to top-3, and writes `findings.json`. Triage is judgment-heavy → use the best **detected** model (opportunistic; never hardcoded). Prompt: `references/ORCHESTRATION.md`. |
 | 3 — FIX | **N× Task, `model: sonnet`** (N in 1..3, one message) | One fixer per finding, lane-isolated test file (`tests/kill_F1.rs`…), playbook recipe + orchestrator-supplied float bound. Tests are left **staged, never committed**. Prompt: `references/ORCHESTRATION.md`. |
 | 4 — VERIFY | Orchestrator + escalation | nextest green once + static float pre-check + lint → `scripts/verify-rerun.sh` (one scoped re-run) → per-finding caught/missed → re-dispatch same Sonnet once → escalate that finding to an Opus fixer once. |
 
@@ -92,12 +92,20 @@ v27 the flag REQUIRES a diff-file value.
 The default engine above (direct `Task` dispatch) works everywhere. **If** the host session has the
 `Workflow` tool **and** the user opts in (a `--workflow` flag, or orchestration already on), the
 orchestrator may instead deploy `workflow/pipeline.js` to run the whole loop as one deterministic,
-resumable pipeline — with **engine variety**: Claude triages and writes the tests, then a
-**cross-vendor adversarial panel** (Codex `gpt-5.5` via `pi`, and openrouter/fusion via the expanded
-`pior` command) audits each *confirmed* kill for brittleness/over-fitting. Engines are **detected** in
-Phase 0, never hardcoded; the panel degrades to Claude-only when the CLIs are absent. Never a hard
-dependency — see `references/WORKFLOW.md` (deployment + gate) and `references/ENGINES.md` (roster,
-detection, the `pior`-alias gotcha, cost guard).
+resumable pipeline — with **opportunistic frontier routing**: reach for frontier intelligence on the
+judgment-heavy phases *when it's available*, else fall back gracefully.
+
+- **Triage:** best detected frontier judge — `fable` if present, else `opus`, else `sonnet`.
+- **Fix:** `sonnet` (mechanical test authoring — not a frontier task).
+- **Audit:** a **frontier, cross-vendor** skeptic panel — **Codex `gpt-5.5`** (via `pi`), **fable**,
+  and **openrouter/fusion** (via the expanded `pior` command) — attacks each *confirmed* kill for
+  brittleness/over-fitting; falls back to **opus** when no frontier engine is present.
+
+Frontier engines are **detected** in Phase 0, never hardcoded — `fable` is temporarily unavailable
+upstream but is **auto-used the moment it returns** (no code change). The pipeline always degrades to
+Claude-only (opus/sonnet) when the external CLIs are absent. Never a hard dependency — see
+`references/WORKFLOW.md` (deploy + gate) and `references/ENGINES.md` (roster, detection, the
+`pior`-alias gotcha, cost guard, fallback ladder).
 
 ## 8. Reference index
 

@@ -150,6 +150,24 @@ impact = killability_gate × (0.35·silent_severity + 0.30·criticality + 0.20·
 - **Resumable.** Per-finding `status` + a `verify.json` sidecar + a monotonic promotion ledger let a
   run resume after compaction without duplicating tests or looping.
 
+## Optional: multi-engine workflow
+
+The default engine is direct agent dispatch and works in any Claude Code session. If your host has a
+`Workflow` tool and you opt in, the orchestrator can instead deploy `workflow/pipeline.js` to run the
+whole loop as one deterministic, resumable pipeline with **opportunistic frontier routing** — it
+reaches for frontier intelligence on the judgment-heavy phases *when it's available*, and falls back
+gracefully otherwise:
+
+- **Triage:** best detected frontier judge (e.g. `fable`), else `opus`, else `sonnet`.
+- **Fix:** `sonnet`.
+- **Audit:** a cross-vendor skeptic panel that attacks each *confirmed* kill for brittleness/over-fitting
+  — e.g. **Codex `gpt-5.5`** and an **OpenRouter** model alongside Claude — falling back to `opus` when
+  no extra engine is present.
+
+Engines are **detected**, never hardcoded, so a temporarily-unavailable model is simply skipped and
+picked up again automatically when it returns. The cross-vendor engines are invoked via your own local
+CLIs and are entirely optional — see `references/ENGINES.md` and `references/WORKFLOW.md`.
+
 ## Limitations
 
 - Rust + cargo-mutants only.

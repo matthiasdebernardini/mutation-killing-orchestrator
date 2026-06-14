@@ -3,30 +3,33 @@
 // The skill's DEFAULT engine is direct Task/Agent dispatch (works everywhere Claude Code runs).
 // This script is the optional accelerator: when the host has the Workflow tool AND the user opted
 // in, the orchestrator deploys it to run triage -> fix -> verify -> adversarial-audit as one
-// deterministic, resumable pipeline. ENGINE VARIETY (Claude proposes, rival vendors dispose):
-//   - triage : best available Claude judge (opus -> fable)
-//   - fix    : sonnet (reliable Rust test authoring)
-//   - audit  : CROSS-VENDOR skeptic panel — Codex gpt-5.5 (via `pi`) + openrouter/fusion (via the
-//              expanded `pior` command). cargo-mutants already proved the kill; the panel attacks
-//              TEST QUALITY (brittle / over-fit / semantically-wrong / vacuous).
-// See references/ENGINES.md for detection, the alias gotcha, and cost notes (fusion is expensive).
+// deterministic, resumable pipeline. OPPORTUNISTIC FRONTIER ROUTING — reach for frontier
+// intelligence on the judgment-heavy phases when it's available, else fall back gracefully:
+//   - triage : best DETECTED frontier judge — fable if present, else opus, else sonnet
+//   - fix    : sonnet (mechanical Rust test authoring — not a frontier task)
+//   - audit  : FRONTIER, CROSS-VENDOR skeptic panel — Codex gpt-5.5 (via `pi`) + fable +
+//              openrouter/fusion (via the expanded `pior` command); falls back to opus if none.
+//              cargo-mutants already proved the kill; the panel attacks TEST QUALITY
+//              (brittle / over-fit / semantically-wrong / vacuous).
+// All frontier engines are DETECTED in Phase 0. fable is temporarily unavailable upstream but is
+// auto-used the moment it returns — no code change. See references/ENGINES.md.
 //
 // Deploy with:
 //   Workflow({ scriptPath: "<skill_dir>/workflow/pipeline.js", args: {
 //     skill_dir, crate_dir, outcomes_path:"mutants.out/outcomes.json",
 //     top_n: 3, blast_mode: "ripgrep", run_mutants: false,
-//     engines: { judge:"opus", fixer:"sonnet", codex:true, pior:true, claude_skeptic:false }
+//     engines: { fable:true, codex:true, pior:true, fixer:"sonnet" }  // judge auto-derives: fable->opus
 //   }})
 
 export const meta = {
   name: 'mutation-killing-pipeline',
-  description: 'Multi-engine mutation-killing: Claude triages + fixes, then a cross-vendor panel (Codex + openrouter/fusion) adversarially audits each confirmed kill',
+  description: 'Multi-engine mutation-killing: Claude triages + fixes, then a frontier cross-vendor panel (Codex + fable + openrouter/fusion, else opus) adversarially audits each confirmed kill',
   phases: [
     { title: 'Run', detail: 'optional: nextest baseline + cargo mutants (only if outcomes missing)' },
-    { title: 'Triage', detail: '1x best Claude judge (opus->fable): select-findings.sh -> score -> top-N' },
+    { title: 'Triage', detail: '1x best detected frontier judge (fable/opus): select-findings.sh -> score -> top-N' },
     { title: 'Fix', detail: 'up to N sonnet fixers in parallel, one killing test per finding' },
     { title: 'Verify', detail: 'verify-rerun.sh: scoped re-run -> per-finding caught/missed' },
-    { title: 'Audit', detail: 'cross-vendor panel (Codex gpt-5.5 + openrouter/fusion) attacks each confirmed kill' },
+    { title: 'Audit', detail: 'frontier cross-vendor panel (Codex + fable + fusion, else opus) attacks each confirmed kill' },
   ],
 }
 
@@ -40,24 +43,30 @@ const BLAST = A.blast_mode || 'ripgrep'
 const RUN_MUTANTS = A.run_mutants === true
 const IN = `In ${CRATE} (cd there first)`
 
-// --- engine roster (orchestrator detects availability in Phase 0; see ENGINES.md) ---
+// --- engine roster (orchestrator DETECTS availability in Phase 0; see ENGINES.md) ---
+// FRONTIER-intelligence engines are reached for on the judgment-heavy phases (triage, audit) WHEN
+// present, else the pipeline falls back to opus, then sonnet. All are OPT-IN: the script can't shell
+// out to detect, so Phase 0 sets these flags. fable is a first-class frontier engine — temporarily
+// banned upstream, but the moment detection sees it again it's used automatically (no code change).
 const E = A.engines || {}
-const JUDGE = E.judge || 'opus'            // best Claude judge for triage: 'opus' or 'fable'
-const FIXER = E.fixer || 'sonnet'          // Claude authors the tests
-const CODEX = E.codex !== false            // Codex gpt-5.5 via `pi` (default ON)
-const PIOR  = E.pior  !== false            // openrouter/fusion via expanded pior cmd (default ON; EXPENSIVE)
+const FABLE = E.fable === true             // claude-fable-5 (frontier Claude)
+const CODEX = E.codex === true             // Codex gpt-5.5 via `pi` (frontier, cross-vendor)
+const PIOR  = E.pior  === true             // openrouter/fusion via expanded pior cmd (frontier; EXPENSIVE)
+const JUDGE = E.judge || (FABLE ? 'fable' : 'opus')  // triage judge: best frontier Claude, else opus
+const FIXER = E.fixer || 'sonnet'          // fix is mechanical test-authoring — workhorse model
 const CODEX_CMD = E.codex_cmd || 'pi -p --no-tools'
 // `pior` is an interactive-only shell ALIAS; a script must use the expanded command. We also DROP
 // the alias's Rails --append-system-prompt flags — they'd bias a mutation-test review.
 const PIOR_CMD = E.pior_cmd || 'pi --provider openrouter --model fusion --api-key "$(cat "$HOME/.config/orcc/key")" --no-context-files --no-skills --no-extensions -p --no-tools'
 
-// One adversarial skeptic per available external vendor (+ optional Claude leg).
+// Adversarial AUDIT panel: prefer the FRONTIER engines (Codex + fable + fusion) for cross-vendor
+// diversity; if NONE are present, the best available Claude (opus) does the audit. Fix stays sonnet.
 function skepticPanel() {
   const pool = []
-  if (CODEX) pool.push({ kind: 'cli', cmd: CODEX_CMD, name: 'codex/gpt-5.5' })
-  if (PIOR)  pool.push({ kind: 'cli', cmd: PIOR_CMD,  name: 'openrouter/fusion' })
-  if (E.claude_skeptic) pool.push({ kind: 'claude', model: JUDGE, name: JUDGE })
-  if (pool.length === 0) pool.push({ kind: 'claude', model: 'sonnet', name: 'sonnet' }) // safety net
+  if (CODEX) pool.push({ kind: 'cli',    cmd: CODEX_CMD, name: 'codex/gpt-5.5' })
+  if (FABLE) pool.push({ kind: 'claude', model: 'fable', name: 'fable' })
+  if (PIOR)  pool.push({ kind: 'cli',    cmd: PIOR_CMD,  name: 'openrouter/fusion' })
+  if (pool.length === 0) pool.push({ kind: 'claude', model: 'opus', name: 'opus' }) // best-Claude fallback
   return pool
 }
 const slug = s => s.replace(/[^A-Za-z0-9]/g, '')
@@ -116,7 +125,7 @@ Confirm ${OUTCOMES} now exists with a >0 .missed count, or report the terminal s
     { label: 'run-mutants', phase: 'Run' })
 }
 
-// --- Phase 2: TRIAGE (best Claude judge: opus -> fable) -------------------------
+// --- Phase 2: TRIAGE (best detected frontier judge: fable -> opus) --------------
 phase('Triage')
 const triage = await agent(`${IN}. You are the mutation-triage judge (skill: ${SKILL}).
 1. Run \`${SKILL}/scripts/select-findings.sh ${OUTCOMES} mutants.out/mko-grouped.json\` (it groups

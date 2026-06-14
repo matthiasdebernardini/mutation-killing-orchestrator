@@ -37,12 +37,11 @@ Workflow({
     top_n: 3,                  // selection cap (--top N)
     blast_mode: "ripgrep",     // or "codegraph" if .codegraph/ exists
     run_mutants: false,        // true => the workflow also runs Phase 0/1 (baseline + cargo mutants)
-    engines: {                 // from Phase-0 detection (see ENGINES.md)
-      judge: "opus",           // opus | fable
-      fixer: "sonnet",
+    engines: {                 // from Phase-0 detection (see ENGINES.md); frontier engines are opt-in
+      fable: false,            // true the moment the ban lifts -> becomes the judge + joins the audit
       codex: true,             // pi present
       pior:  true,             // pi present AND ~/.config/orcc/key present (EXPENSIVE)
-      claude_skeptic: false    // also add a Claude leg to the audit panel?
+      fixer: "sonnet"          // judge omitted -> derived: fable if available, else opus
     }
   }
 })
@@ -53,10 +52,10 @@ Workflow({
 | Phase | Engine | Output |
 |---|---|---|
 | Run (optional) | shell agent | `outcomes.json` (only if `run_mutants` and it's missing) |
-| Triage | Claude judge (opus→fable) | `findings.json` (top-N, schema-validated) |
+| Triage | best detected frontier judge (fable→opus) | `findings.json` (top-N, schema-validated) |
 | Fix | sonnet × N (parallel, lane-isolated) | one killing test + fixer report per finding |
 | Verify | `verify-rerun.sh` | `verify.json` — per-finding caught/missed (cargo-mutants is ground truth) |
-| Audit | cross-vendor panel (Codex + fusion) | per confirmed kill: `suspect` flag + per-engine verdicts |
+| Audit | frontier cross-vendor panel (Codex + fable + fusion, else opus) | per confirmed kill: `suspect` flag + per-engine verdicts |
 
 ## Return shape
 
