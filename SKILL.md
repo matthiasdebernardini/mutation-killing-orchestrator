@@ -87,11 +87,26 @@ v27 the flag REQUIRES a diff-file value.
 - Auto-commit the killing tests, or silently write `exclude_re`. Both require explicit approval.
 - Use `rm` in any script — use `trash` or leave `mktemp -d` dirs.
 
-## 7. Reference index
+## 7. Optional: multi-engine workflow accelerator
+
+The default engine above (direct `Task` dispatch) works everywhere. **If** the host session has the
+`Workflow` tool **and** the user opts in (a `--workflow` flag, or orchestration already on), the
+orchestrator may instead deploy `workflow/pipeline.js` to run the whole loop as one deterministic,
+resumable pipeline — with **engine variety**: Claude triages and writes the tests, then a
+**cross-vendor adversarial panel** (Codex `gpt-5.5` via `pi`, and openrouter/fusion via the expanded
+`pior` command) audits each *confirmed* kill for brittleness/over-fitting. Engines are **detected** in
+Phase 0, never hardcoded; the panel degrades to Claude-only when the CLIs are absent. Never a hard
+dependency — see `references/WORKFLOW.md` (deployment + gate) and `references/ENGINES.md` (roster,
+detection, the `pior`-alias gotcha, cost guard).
+
+## 8. Reference index
 
 - `references/IMPACT-RUBRIC.md` — full rubric, op-class derivation, domain keywords, blast-radius procedure (+ rg fallback), tie-break ladder, accepted taxonomy, float-tolerance trap.
 - `references/PLAYBOOK.md` — the 8 mutant→test shapes (stable `playbook_shape` tokens).
 - `references/ORCHESTRATION.md` — dispatch contract, verbatim triage + fixer prompts, `findings.json`/`fixer-report`/`verify.json` schemas, float-bound procedure, re-dispatch→escalate ladder, terminal-state matrix, resume/idempotency.
+- `references/ENGINES.md` — multi-vendor engine roster, Phase-0 detection, the `pior`-alias gotcha, role→engine matrix, cost guard, fallback ladder.
+- `references/WORKFLOW.md` — when/how the orchestrator deploys `workflow/pipeline.js`, the args contract, phases, and return shape.
+- `workflow/pipeline.js` — the optional multi-engine Workflow script (triage → fix → verify → cross-vendor audit).
 - `scripts/select-findings.sh` — deterministic grouping + op-class + noise pre-tag → grouped JSON.
 - `scripts/verify-rerun.sh` — scoped re-run → per-finding caught/missed → `verify.json`.
 - `scripts/self-test.sh` — install integrity + drift guards + end-to-end quick-smoke.

@@ -181,10 +181,38 @@ RUST
   fi
 fi
 
+# --- 9. multi-engine workflow layer (private-branch accelerator) ----------------
+sect "workflow engine (optional multi-engine layer)"
+WF="$SKILL_DIR/workflow/pipeline.js"
+if [ -f "$WF" ]; then
+  ok "workflow/pipeline.js present"
+  for d in references/ENGINES.md references/WORKFLOW.md; do
+    [ -f "$SKILL_DIR/$d" ] && ok "$d present" || bad "missing $d"
+    grep -q "$(basename "$d")" "$SKILL_DIR/SKILL.md" && ok "SKILL.md references $(basename "$d")" || bad "SKILL.md does not reference $(basename "$d")"
+  done
+  grep -q 'pipeline.js' "$SKILL_DIR/SKILL.md" && ok "SKILL.md references pipeline.js" || bad "SKILL.md does not reference pipeline.js"
+  # openrouter/fusion must be the EXPANDED command (pior is an interactive-only alias). Assert the
+  # markers of the full expansion are present (provider + model + api-key), which the bare alias lacks.
+  if grep -q 'provider openrouter' "$WF" && grep -q 'model fusion' "$WF" && grep -q -- '--api-key' "$WF"; then
+    ok "pipeline.js uses the expanded openrouter/fusion command (provider+model+api-key)"
+  else bad "pipeline.js missing the expanded openrouter/fusion command"; fi
+  # JS validity: the runtime wraps the body in an async fn, so validate it that way.
+  # node infers module format from the extension, so the temp file MUST end in .js.
+  if command -v node >/dev/null 2>&1; then
+    CHKD="$(mktemp -d)"; CHK="$CHKD/check.js"
+    { echo 'async function __wf(args,agent,parallel,pipeline,phase,log,budget,workflow){'; sed 's/^export const meta/const meta/' "$WF"; echo '}'; } > "$CHK"
+    if node --check "$CHK" 2>/tmp/mko-wf-check.log; then ok "pipeline.js is syntactically valid (as the runtime wraps it)"; else bad "pipeline.js has a syntax error (see /tmp/mko-wf-check.log)"; fi
+  else echo "  - node not installed; skipping pipeline.js syntax check"; fi
+else
+  echo "  - no workflow/ layer installed (Claude-only core); skipping multi-engine checks"
+fi
+
 # --- agent-loop caveat ----------------------------------------------------------
 sect "not covered here"
 echo "  - The opus-triage / sonnet-fix dispatch loop needs the Task tool and is validated by a"
 echo "    real skill invocation, not this shell script. Run the skill on a seeded crate to cover it."
+echo "  - The cross-vendor audit panel (Codex via pi, openrouter/fusion via pior) needs those CLIs"
+echo "    and live API calls — exercised by a real workflow run, not this script."
 
 # --- tally ----------------------------------------------------------------------
 echo; echo "==============================="
