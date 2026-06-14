@@ -1,0 +1,6 @@
+.DS_Store
+mutants.out/
+mutants-verify.out/
+mko-grouped.json
+findings.json
+verify.json
