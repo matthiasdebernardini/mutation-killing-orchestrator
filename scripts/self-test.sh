@@ -116,6 +116,40 @@ else
   ok "select-findings.sh exits non-zero on schema drift"
 fi
 
+# --- 7b. op-class parser coverage (all 8 branches, model-free) -------------------
+sect "op-class parser coverage"
+OCFIX="$(mktemp)"
+cat > "$OCFIX" <<'JSON'
+{ "missed": 7, "total_mutants": 7, "outcomes": [
+  {"summary":"MissedMutant","scenario":{"Mutant":{"name":"src/a.rs:1:1: replace + with * in f_arith","file":"src/a.rs","function":{"function_name":"f_arith","return_type":"-> i64"},"span":{"start":{"line":1}},"replacement":"*","genre":"BinaryOperator"}}},
+  {"summary":"MissedMutant","scenario":{"Mutant":{"name":"src/a.rs:2:1: replace < with <= in f_cmp","file":"src/a.rs","function":{"function_name":"f_cmp","return_type":"-> bool"},"span":{"start":{"line":2}},"replacement":"<=","genre":"BinaryOperator"}}},
+  {"summary":"MissedMutant","scenario":{"Mutant":{"name":"src/a.rs:3:1: replace && with || in f_bool","file":"src/a.rs","function":{"function_name":"f_bool","return_type":"-> bool"},"span":{"start":{"line":3}},"replacement":"||","genre":"BinaryOperator"}}},
+  {"summary":"MissedMutant","scenario":{"Mutant":{"name":"src/a.rs:4:1: replace & with | in f_bit","file":"src/a.rs","function":{"function_name":"f_bit","return_type":"-> u8"},"span":{"start":{"line":4}},"replacement":"|","genre":"BinaryOperator"}}},
+  {"summary":"MissedMutant","scenario":{"Mutant":{"name":"src/a.rs:5:1: replace ! with  in f_neg","file":"src/a.rs","function":{"function_name":"f_neg","return_type":"-> bool"},"span":{"start":{"line":5}},"replacement":"","genre":"UnaryOperator"}}},
+  {"summary":"MissedMutant","scenario":{"Mutant":{"name":"src/a.rs:6:1: replace f_stub -> i64 with 0","file":"src/a.rs","function":{"function_name":"f_stub","return_type":"-> i64"},"span":{"start":{"line":6}},"replacement":"0","genre":"FnValue"}}},
+  {"summary":"MissedMutant","scenario":{"Mutant":{"name":"src/a.rs:7:1: replace Color::as_str -> &'static str with \"\"","file":"src/a.rs","function":{"function_name":"as_str","return_type":"-> &'static str"},"span":{"start":{"line":7}},"replacement":"\"\"","genre":"FnValue"}}}
+]}
+JSON
+OCGROUPED="$(mktemp)"
+if "$SKILL_DIR/scripts/select-findings.sh" "$OCFIX" "$OCGROUPED" 2>/dev/null; then
+  ok "select-findings.sh ran on the op-class fixture"
+  # expected: function_name -> "op_class:severity"
+  for spec in \
+    "f_arith:arithmetic:5" "f_cmp:comparison:3" "f_bool:boolean:3" \
+    "f_bit:binop-other:3" "f_neg:unary:3" "f_stub:fnvalue:3" "as_str:label:1"; do
+    fn="${spec%%:*}"; rest="${spec#*:}"; want_oc="${rest%%:*}"; want_sev="${rest##*:}"
+    got_oc="$(jq -r --arg fn "$fn" '.findings[]|select(.function_name==$fn)|.op_classes[0]' "$OCGROUPED")"
+    got_sev="$(jq -r --arg fn "$fn" '.findings[]|select(.function_name==$fn)|.max_silent_severity' "$OCGROUPED")"
+    if [ "$got_oc" = "$want_oc" ] && [ "$got_sev" = "$want_sev" ]; then
+      ok "$fn -> $got_oc (sev $got_sev)"
+    else
+      bad "$fn -> got $got_oc/$got_sev, expected $want_oc/$want_sev"
+    fi
+  done
+else
+  bad "select-findings.sh failed on the op-class fixture (see stderr)"
+fi
+
 # --- 8. deterministic end-to-end smoke (cargo mutants real run) ----------------
 if [ "$QUICK" -eq 1 ]; then
   sect "crate smoke (skipped: --quick)"; echo "  - skipped"
@@ -164,7 +198,7 @@ RUST
       cat >> "$CRATE/src/lib.rs" <<'RUST'
 
 #[cfg(test)]
-mod kill { use super::*; #[test] fn kill_mutant_residual() { assert_eq!(residual(10,3), 7); } }
+mod kill { use super::*; #[test] fn kill_mutant_src_lib_rs_2() { assert_eq!(residual(10,3), 7); } }
 RUST
       CLAIMS="$(mktemp)"
       jq -nc '{scope:"src/lib.rs", per_finding:[{finding_id:"F1", claimed_killed:[

@@ -40,4 +40,4 @@ Each fixer writes to a **distinct per-lane test file** (`tests/kill_F1.rs`, `tes
 …) so parallel fixers never collide. If a finding can only be tested from inside an existing
 in-module `#[cfg(test)]` block shared with another lane, those two fixers run **sequentially**
 within the otherwise-parallel batch. Test fns are named
-`kill_mutant_<file>_<line>_<op>` for dedup on resume.
+`kill_mutant_<file_sanitized>_<line>` for dedup on resume.

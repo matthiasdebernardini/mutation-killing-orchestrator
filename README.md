@@ -33,7 +33,7 @@ test-shaped clusters (one known-value test kills a whole formula's swaps).
 | [`jq`](https://jqlang.github.io/jq/) | Deterministic grouping/parsing of survivors. **Hard requirement** — scripts error if absent. |
 | [`cargo-nextest`](https://nexte.st/) | The test runner cargo-mutants drives, and the baseline gate. |
 | Claude Code with a per-agent `model:` override (the `Task`/Agent tool) | Dispatches the Opus triage and Sonnet fixers. |
-| [codegraph](https://github.com/) *(optional)* | Blast-radius fan-in. Falls back to `ripgrep` when absent. |
+| codegraph *(optional)* | Blast-radius fan-in. Falls back to `ripgrep` when absent. |
 
 ## Install
 
@@ -49,7 +49,7 @@ Verify the install:
 
 ```bash
 ~/.claude/skills/mutation-killing-orchestrator/scripts/self-test.sh
-# -> self-test: 36 passed, 0 failed
+# -> ends with: self-test: <N> passed, 0 failed   (N varies by environment; "0 failed" is what matters)
 ```
 
 ## Usage

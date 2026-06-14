@@ -149,18 +149,19 @@ log(`Triage [${JUDGE}]: ${triage.top_findings.length} to fix; ${triage.accepted_
 
 // --- Phase 3: FIX (N sonnet fixers, parallel, lane-isolated) --------------------
 phase('Fix')
-const reports = (await parallel(triage.top_findings.map((f, i) => () =>
-  agent(`${IN}. You are a mutation-killing fixer for finding ${f.id} (lane m_${i + 1}).
+const reports = (await parallel(triage.top_findings.map((f, i) => () => {
+  const tfn = 'kill_mutant_' + f.file.replace(/[^A-Za-z0-9]/g, '_') + '_' + f.line
+  return agent(`${IN}. You are a mutation-killing fixer for finding ${f.id} (lane m_${i + 1}).
 Finding: ${JSON.stringify(f)}
 Read the recipe for playbook_shape="${f.playbook_shape}" in ${SKILL}/references/PLAYBOOK.md and the
 float-tolerance discipline. Write ONE test fn into a DISTINCT lane file tests/kill_${f.id}.rs named
-kill_mutant_${f.function_name}_${f.line} that kills EVERY mutant in claimed_cluster_names:
+exactly ${tfn} that kills EVERY mutant in claimed_cluster_names:
   ${JSON.stringify(f.claimed_cluster_names)}
 Pin exact expected values; if numeric, use a tolerance tighter than half the real-vs-mutated gap
 (never a loose range). Run \`cargo nextest run\` and confirm GREEN on the real code before returning.
 claimed_killed must be exactly the cluster names your test kills.`,
     { model: FIXER, label: `fix:${f.id}`, phase: 'Fix', schema: FIXER_SCHEMA })
-))).filter(Boolean)
+}))).filter(Boolean)
 log(`Fix [${FIXER}]: ${reports.length}/${triage.top_findings.length} fixers returned a green test.`)
 
 // --- Phase 4: VERIFY (1 agent runs the scoped re-run via verify-rerun.sh) --------

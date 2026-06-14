@@ -78,8 +78,10 @@ path; the lane id; the per-lane test-file target (`tests/kill_F<k>.rs`).
 **Allowed tools:** `Read`, `Write`, `Edit`, `Bash` (to run `cargo nextest run`).
 
 **Output:** a fixer report (schema below). The test fn is named
-`kill_mutant_<file>_<line>_<op>`; it MUST run green on real (unmutated) code before the fixer
-returns. For numeric findings the assertion MUST use the supplied float bound.
+`kill_mutant_<file_sanitized>_<line>`; it MUST run green on real (unmutated) code before the fixer
+returns. `<file_sanitized>` = the source file path with every non-alphanumeric character replaced by
+`_` (e.g. `src/lib.rs` → `src_lib_rs`); `<op>` is intentionally dropped because one test kills the
+whole `(file,line)` cluster. For numeric findings the assertion MUST use the supplied float bound.
 
 **Verbatim prompt skeleton:**
 ```
@@ -89,7 +91,7 @@ Recipe (playbook_shape={SHAPE}):
 {RECIPE_TEXT}
 Float bound (if numeric): {FLOAT_BOUND_JSON}   # {input, expected, mutated, suggested_bound}
 
-Write ONE test fn `kill_mutant_<file>_<line>_<op>` into {TEST_FILE} that kills EVERY mutant in
+Write ONE test fn `kill_mutant_<file_sanitized>_<line>` into {TEST_FILE} that kills EVERY mutant in
 the finding's cluster_members. Pin exact expected values; if numeric, use suggested_bound (a
 tolerance tighter than half the expected-vs-mutated gap) — never a loose range. Run
 `cargo nextest run` and confirm green on real code. Then return ONLY the fixer-report JSON:
@@ -147,7 +149,7 @@ assertion tolerance is tighter than the expected-vs-mutated gap. Non-numeric fin
 ### fixer report (returned by each Sonnet fixer)
 ```json
 { "finding_id": "F1", "test_file": "tests/kill_F1.rs",
-  "test_fn": "kill_mutant_src_lib_rs_2_sub",
+  "test_fn": "kill_mutant_src_lib_rs_2",
   "claimed_killed": [ "src/lib.rs:2:15: replace - with / in residual" ],
   "float_check": "n/a | mutated=<X> bound_excludes=true",
   "passes_on_real_code": true }
@@ -210,6 +212,6 @@ at the verify/report boundary — never by a script, never silently. Killing tes
 - **Status:** each `top_findings` entry carries `status` (§schema); `verify.json` holds
   per-finding results. On resume, CAUGHT/accepted findings are skipped.
 - **Dedup:** before dispatching a fixer, grep the target test file for the exact
-  `fn kill_mutant_<file>_<line>_<op>` — skip if present.
+  `fn kill_mutant_<file_sanitized>_<line>` — skip if present.
 - **Promotion ledger:** DEFERRED→top promotions append to `promoted` (monotonic) so resume
   cannot re-promote or loop.
